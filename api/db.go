@@ -40,27 +40,35 @@ type Table interface {
 }
 
 func (c *City) stringifyRowValues() string {
-	return fmt.Sprintf("%v, %s, %f, %f, %f", c.ID, c.Name, c.Latitude, c.Longitude, c.Elevation)
+	return fmt.Sprintf(`"%s", %f, %f, %f`, c.Name, c.Latitude, c.Longitude, c.Elevation)
 }
 
 func (c *City) stringifyColumns() string {
-	return "id, name, latitude, longitude, elevation"
+	return "name, latitude, longitude, elevation"
 }
 
 func (c *City) getTablename() string {
 	return "cities"
 }
 
+func (c *City) newEntry() *City {
+	return &City{}
+}
+
 func (w *WeatherReportHourly) stringifyRowValues() string {
-	return fmt.Sprintf("%v, %s, %v, %v, %f, %v, %f, %v, %v, %f, %f", w.ID, w.Time, w.CityID, w.ForecastDays, w.Temperature, w.PercipitationProbability, w.Precipitation, w.CloudCover, w.WindDirection, w.UVIndex, w.SurfacePressure)
+	return fmt.Sprintf(`"%s", %v, %v, %f, %v, %f, %v, %v, %f, %f`, w.Time, w.CityID, w.ForecastDays, w.Temperature, w.PercipitationProbability, w.Precipitation, w.CloudCover, w.WindDirection, w.UVIndex, w.SurfacePressure)
 }
 
 func (w *WeatherReportHourly) stringifyColumns() string {
-	return "id, time, city, forecast_days, temperature, precipitation_probability, cloud_cover, wind_direction, uv_index, surface_pressure"
+	return "time, city, forecast_days, temperature, precipitation_probability, precipitation, cloud_cover, wind_direction, uv_index, surface_pressure"
 }
 
 func (w *WeatherReportHourly) getTablename() string {
 	return "weather_reports"
+}
+
+func (w *WeatherReportHourly) newEntry() *WeatherReportHourly {
+	return &WeatherReportHourly{}
 }
 
 // InitDB initializes the SQLite database and creates the todos table if it doesn't exist
@@ -105,7 +113,7 @@ func InitDB() {
 		log.Fatalf("Error creating table: %q: %s\n", err, sql_create_weatherReports) // Log an error if table creation fails
 	}
 
-	if len(os.Args) > 2 && os.Args[2] == "sample" {
+	if len(os.Args) > 1 && os.Args[1] == "sample" {
 		if err := AddSampleData(); err != nil {
 			log.Fatalf("Error adding sample data: %v", err)
 		}
@@ -114,8 +122,8 @@ func InitDB() {
 
 func AddSampleData() error {
 
-	city := &City{ID: 1, Name: "Oberteuringen", Latitude: 47.7241, Longitude: 9.4698, Elevation: 450.0}
-	report1 := &WeatherReportHourly{ID: 1, Time: "2025-09-10 06:00", CityID: city.ID, ForecastDays: 0, Temperature: 14.3, PercipitationProbability: 23, Precipitation: 0.0, CloudCover: 89, WindDirection: 135, UVIndex: 2.1, SurfacePressure: 950.3}
+	city := &City{Name: "Oberteuringen", Latitude: 47.7241, Longitude: 9.4698, Elevation: 450.0}
+	report1 := &WeatherReportHourly{Time: "2025-09-10 06:00", CityID: city.ID, ForecastDays: 0, Temperature: 14.3, PercipitationProbability: 23, Precipitation: 0.0, CloudCover: 89, WindDirection: 135, UVIndex: 2.1, SurfacePressure: 950.3}
 
 	_, err := InsertRow(city)
 	if err != nil {
@@ -129,40 +137,28 @@ func AddSampleData() error {
 	return nil
 }
 
-func NewTableEntry(tablename string) {
-	switch tablename {
-	case "cities":
-		return &City{}
-	case "weather_reports":
-		return &WeatherReportHourly{}
-	default:
-		return fmt.Errorf("Can´t create table entry. Table does not exist.")
-	}
-
-}
-
 // CRUD
-func GetAll(tablename string) ([]Table, error) {
+func GetAll[T Table](tablename string, newItem func() T) ([]T, error) {
 	query := fmt.Sprintf("SELECT * FROM %s", tablename)
-	rows, err := db.Query(query)
+
+	rows, err := db.Queryx(query)
 	if err != nil {
-		return []Table{}, err
+		return nil, err
 	}
 	defer rows.Close()
 
-	data := []Table{}
+	var data []T
 
 	for rows.Next() {
-		item := NewTableEntry(tablename)
-		err = rows.StructScan(&item)
+		item := newItem()
+		err = rows.StructScan(item)
 		if err != nil {
-			return []Table{}, err
+			return nil, err
 		}
 		data = append(data, item)
 	}
 
 	return data, nil
-
 }
 
 func InsertRow(data Table) (int64, error) {
@@ -171,7 +167,9 @@ func InsertRow(data Table) (int64, error) {
 	columnstring := data.stringifyColumns()
 	datastring := data.stringifyRowValues()
 
-	stmt := fmt.Sprintf("INSERT INTO %s(%s) VALUES(%s)", tablename, columnstring, datastring)
+	stmt := fmt.Sprintf(`INSERT INTO %s(%s) VALUES(%s)`, tablename, columnstring, datastring)
+
+	fmt.Println(stmt)
 
 	result, err := db.Exec(stmt)
 	if err != nil {

@@ -25,6 +25,7 @@ func main() {
 	app := fiber.New()
 
 	app.Get("/weatherReports", api.GetWeatherReports)
+	app.Get("/cities", api.GetCities)
 	// app.Post("/api/weatherReports", createWeatherReport)
 	// app.Patch("/api/weatherReports/:id", updateWeatherReport)
 	// app.Delete("/api/weatherReports/:id", deleteWeatherReport)
