@@ -24,7 +24,7 @@ func main() {
 	api.InitDB()
 	app := fiber.New()
 
-	app.Get("/weatherReports", api.GetWeatherReports)
+	app.Get("/weatherreports", api.GetWeatherReports)
 	app.Get("/cities", api.GetCities)
 	// app.Post("/api/weatherReports", createWeatherReport)
 	// app.Patch("/api/weatherReports/:id", updateWeatherReport)
